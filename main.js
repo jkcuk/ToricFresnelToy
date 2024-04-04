@@ -246,15 +246,12 @@ function addRaytracingSphere() {
 			centreOfArray2: { value: new THREE.Vector3(0, 0, 0) },	// principal point of lenslet (0, 0)
 			videoFeedUTexture: { value: videoFeedUTexture }, 
 			videoFeedETexture: { value: videoFeedETexture },
-			tanHalfFovHU: { value: 1.0 },
-			tanHalfFovVU: { value: 1.0 },
-			tanHalfFovHE: { value: 1.0 },
-			tanHalfFovVE: { value: 1.0 },
 			halfWidthU: { value: 1.0 },
 			halfHeightU: { value: 1.0 },
 			halfWidthE: { value: 1.0 },
 			halfHeightE: { value: 1.0 },
 			videoDistance: { value: 10.0 },	// distance of the image of the video feed from the origin
+			showVideoFeedBehind: { value: false },
 			focusDistance: { value: 10.0 },
 			apertureXHat: { value: new THREE.Vector3(1, 0, 0) },
 			apertureYHat: { value: new THREE.Vector3(0, 1, 0) },
@@ -310,6 +307,8 @@ function addRaytracingSphere() {
 			uniform sampler2D videoFeedETexture;
 			uniform float halfWidthE;
 			uniform float halfHeightE;
+
+			uniform bool showVideoFeedBehind;
 
 			// the camera's wide aperture
 			uniform float videoDistance;
@@ -479,7 +478,7 @@ function addRaytracingSphere() {
 						// lower the brightness factor, giving the light a blue tinge
 						b *= vec4(0.9, 0.9, 0.99, 1);
 					} 
-				} else b *= vec4(0.99, 0.9, 0.9, 1);	// this shouldn't happen -- give the light a red tinge
+				} // else b *= vec4(0.99, 0.9, 0.9, 1);	// this shouldn't happen -- give the light a red tinge
 			}
 
 			// propagate the ray to the plane of the video feed, which is a z-distance <videoDistance> away,
@@ -487,7 +486,7 @@ function addRaytracingSphere() {
 			vec4 getColorOfVideoFeed(
 				inout vec3 p, 
 				vec3 d, 
-				vec4 b,
+				inout bool intersectVideoFeed,
 				float videoFeedZ,
 				sampler2D videoFeedTexture,
 				float halfWidth,
@@ -500,13 +499,14 @@ function addRaytracingSphere() {
 				// is the intersection in the ray's forward direction?
 				if(isForward) {
 					// does the ray intersect the image?
-					if((abs(p.x) < halfWidth) && (abs(p.y) < halfHeight))
+					intersectVideoFeed = (abs(p.x) < halfWidth) && (abs(p.y) < halfHeight);
+					if(intersectVideoFeed)
 						// yes, the ray intersects the image; take the pixel colour from the camera's video feed
 						return texture2D(videoFeedTexture, vec2(0.5+0.5*p.x/halfWidth, 0.5+0.5*p.y/halfHeight));
 					else 
 						// the ray doesn't intersect the image
 						return backgroundColor;
-				}
+				} else intersectVideoFeed = false;
 			}
 
 			void main() {
@@ -531,19 +531,30 @@ function addRaytracingSphere() {
 	
 					// current brightness factor; this will multiply the colour at the end
 					vec4 b = vec4(1.0, 1.0, 1.0, 1.0);
-	
+
+					bool intersectVideoFeed = false;
 					if(d.z < 0.0) {
 						// the ray is travelling "forwards", in the (-z) direction;
-						// pass first through array 1, then array 2, then to environment-facing video feed
-						if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
-						if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
-						color = getColorOfVideoFeed(p, d, b, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));	// white
+						if(showVideoFeedBehind && (p.z > videoDistance))
+							// the camera is so far back that it might intersect the "other" video feed
+							color = getColorOfVideoFeed(p, d, intersectVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
+						if(!intersectVideoFeed) {
+							// pass first through array 1, then array 2, then to environment-facing video feed
+							if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
+							if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
+							color = getColorOfVideoFeed(p, d, intersectVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
+						}
 					} else {
 						// the ray is travelling "backwards", in the (+z) direction;
-						// pass first through array 2, then array 1, then to user-facing video feed
-						if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
-						if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
-						color = getColorOfVideoFeed(p, d, b, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));	// white
+						if(showVideoFeedBehind && (p.z < -videoDistance))
+							// the camera is so far back that it might intersect the "other" video feed
+							color = getColorOfVideoFeed(p, d, intersectVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
+						if(!intersectVideoFeed) {
+							// pass first through array 2, then array 1, then to user-facing video feed
+							if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
+							if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
+							color = getColorOfVideoFeed(p, d, intersectVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
+						}
 					}
 		
 					// finally, multiply by the brightness factor and add to gl_FragColor
@@ -688,7 +699,8 @@ function createGUI() {
 		'No of rays': noOfRays,
 		'Env.-facing cam. (&deg;)': fovVideoFeedE,
 		'User-facing cam. (&deg;)': fovVideoFeedU,
-		'tan<sup>-1</sup>(video dist.)': Math.atan(raytracingSphereShaderMaterial.uniforms.videoDistance.value),
+		'1/(video dist.)': 1.0/raytracingSphereShaderMaterial.uniforms.videoDistance.value,
+		'Show video feed behind': raytracingSphereShaderMaterial.uniforms.showVideoFeedBehind.value,
 		'Point (virtual) cam. forward (in -<b>z</b> direction)': pointForward,
 		'Show/hide info': toggleInfoVisibility,
 		'Restart video streams': function() { 
@@ -727,9 +739,8 @@ function createGUI() {
 	folderVirtualCamera.add( params, 'No of rays', 1, 100, 1).onChange( (n) => { noOfRays = n; } );
 
 	const folderSettings = gui.addFolder( 'Other controls' );
-	folderSettings.add( params, 'tan<sup>-1</sup>(video dist.)', Math.atan(0.1), 0.5*Math.PI).onChange( (a) => { raytracingSphereShaderMaterial.uniforms.videoDistance.value = Math.tan(a); } );
-	folderSettings.add( params, 'Lenslet type', { 'Ideal thin': true, 'Phase hologram': false } ).onChange( (t) => { raytracingSphereShaderMaterial.uniforms.idealLenses.value = t; });
-	// folderSettings.add( params, 'Ideal lenses').onChange( (b) => { raytracingSphereShaderMaterial.uniforms.idealLenses.value = b; } );
+	folderSettings.add( params, '1/(video dist.)', 0, 1).onChange( (a) => { raytracingSphereShaderMaterial.uniforms.videoDistance.value = 1.0/a; } );
+	folderSettings.add( params, 'Show video feed behind').onChange( (b) => { raytracingSphereShaderMaterial.uniforms.showVideoFeedBehind.value = b; } );
 	folderSettings.add( params, 'Point (virtual) cam. forward (in -<b>z</b> direction)');
 	folderSettings.add( params, 'Show/hide info');
 	folderSettings.add( params, 'Restart video streams');
