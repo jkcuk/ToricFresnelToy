@@ -486,7 +486,7 @@ function addRaytracingSphere() {
 			vec4 getColorOfVideoFeed(
 				inout vec3 p, 
 				vec3 d, 
-				inout bool intersectVideoFeed,
+				inout bool intersectsVideoFeed,
 				float videoFeedZ,
 				sampler2D videoFeedTexture,
 				float halfWidth,
@@ -499,14 +499,15 @@ function addRaytracingSphere() {
 				// is the intersection in the ray's forward direction?
 				if(isForward) {
 					// does the ray intersect the image?
-					intersectVideoFeed = (abs(p.x) < halfWidth) && (abs(p.y) < halfHeight);
-					if(intersectVideoFeed)
+					intersectsVideoFeed = (abs(p.x) < halfWidth) && (abs(p.y) < halfHeight);
+					if(intersectsVideoFeed)
 						// yes, the ray intersects the image; take the pixel colour from the camera's video feed
 						return texture2D(videoFeedTexture, vec2(0.5+0.5*p.x/halfWidth, 0.5+0.5*p.y/halfHeight));
-				} else intersectVideoFeed = false;
+				} else intersectsVideoFeed = false;
+
 				// the ray doesn't intersect the image
 				return backgroundColor;
-	}
+			}
 
 			void main() {
 				// first calculate the point this pixel is focussed on, which is in a z plane a distance
@@ -531,28 +532,28 @@ function addRaytracingSphere() {
 					// current brightness factor; this will multiply the colour at the end
 					vec4 b = vec4(1.0, 1.0, 1.0, 1.0);
 
-					bool intersectVideoFeed = false;
+					bool intersectsVideoFeed = false;
 					if(d.z < 0.0) {
 						// the ray is travelling "forwards", in the (-z) direction;
 						if(showVideoFeedBehind && (p.z > videoDistance))
 							// the camera is so far back that it might intersect the "other" video feed
-							color = getColorOfVideoFeed(p, d, intersectVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
-						if(!intersectVideoFeed) {
+							color = getColorOfVideoFeed(p, d, intersectsVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
+						if(!intersectsVideoFeed) {
 							// pass first through array 1, then array 2, then to environment-facing video feed
 							if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
 							if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
-							color = getColorOfVideoFeed(p, d, intersectVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
+							color = getColorOfVideoFeed(p, d, intersectsVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
 						}
 					} else {
 						// the ray is travelling "backwards", in the (+z) direction;
 						if(showVideoFeedBehind && (p.z < -videoDistance))
 							// the camera is so far back that it might intersect the "other" video feed
-							color = getColorOfVideoFeed(p, d, intersectVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
-						if(!intersectVideoFeed) {
+							color = getColorOfVideoFeed(p, d, intersectsVideoFeed, -videoDistance, videoFeedETexture, halfWidthE, halfHeightE, vec4(1, 1, 1, 1.0));
+						if(!intersectsVideoFeed) {
 							// pass first through array 2, then array 1, then to user-facing video feed
 							if(visible2) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray2, radius, cosAlpha2, sinAlpha2, -focussingPowerGradient, additionalF2);
 							if(visible1) passThroughCrossedLinearPowerLenticularArrays(p, d, b, centreOfArray1, radius, cosAlpha1, sinAlpha1, +focussingPowerGradient, additionalF1);
-							color = getColorOfVideoFeed(p, d, intersectVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
+							color = getColorOfVideoFeed(p, d, intersectsVideoFeed, videoDistance, videoFeedUTexture, halfWidthU, halfHeightU, vec4(1, 0, 0, 1.0));
 						}
 					}
 		
