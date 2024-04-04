@@ -503,11 +503,10 @@ function addRaytracingSphere() {
 					if(intersectVideoFeed)
 						// yes, the ray intersects the image; take the pixel colour from the camera's video feed
 						return texture2D(videoFeedTexture, vec2(0.5+0.5*p.x/halfWidth, 0.5+0.5*p.y/halfHeight));
-					else 
-						// the ray doesn't intersect the image
-						return backgroundColor;
 				} else intersectVideoFeed = false;
-			}
+				// the ray doesn't intersect the image
+				return backgroundColor;
+	}
 
 			void main() {
 				// first calculate the point this pixel is focussed on, which is in a z plane a distance
